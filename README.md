@@ -33,6 +33,30 @@ finalizes.**
    report its offset so it can be carved for analysis. Symbols typically survive
    (protected builds are usually not stripped).
 
+## Deobfuscating the recovered code
+
+The dumped image's protected functions are **control-flow-flattened**: the real
+logic is scattered across small blocks linked by computed branches (`br xN`) and
+padded with junk (self-canceling arithmetic, dead writes). `vmunprotect/
+deobfuscate.py` recovers the real operation sequence statically:
+
+- **constant-folds** every register through the arithmetic/logic ops so a
+  computed branch's target register resolves to a concrete address;
+- **follows the CFG** with a worklist (plain `b`, resolved `br`, both arms of
+  `b.cond`/`cbz`/`cbnz`), recovering the reachable blocks;
+- **strips junk**, leaving the real calls, loads, stores, comparisons, and
+  decision points — the function's actual skeleton.
+
+```bash
+python3 vmunprotect/deobfuscate.py unpacked.bin \
+    --image-vaddr 0x591000 --start 0xb01130
+# -> ops / calls / decision points / resolved edges / unresolved branches
+```
+
+This is a building block, not a full VTIL — it recovers the *shape* of a
+virtualized function (its calls and its decision gates) without decoding the
+VM bytecode. Enough to answer "does this handler check X before doing Y."
+
 ## Environment matrix
 
 | Environment | Supported | Notes |
